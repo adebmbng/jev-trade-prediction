@@ -61,14 +61,46 @@ export class JevService {
       try {
         const criteria = position
           ? {
-              exit: "Close the existing position because reversal, adverse movement or elapsed 1–2 minute objective favors exiting.",
-              wait: "Briefly retain the existing position; evidence still supports its side, or is too uncertain to justify an exit judgment.",
+              exit: {
+                choose_when:
+                  "The newest micro-movement is adverse to the held side, momentum has reversed, giveback is growing, or the 60–120 second objective has elapsed.",
+                sensitivity:
+                  "At the configured leverage, a small adverse raw move is meaningful; a dramatic reversal is not required.",
+              },
+              wait: {
+                choose_when:
+                  "The newest micro-movement still supports the held side and no credible reversal or material giveback is visible.",
+                not_for:
+                  "Do not retain only because the raw movement looks small; judge its leveraged impact.",
+              },
             }
           : {
-              long: "Evidence favors a near-term upward move.",
-              short: "Evidence favors a near-term downward move.",
-              wait: "Conflicting or insufficient evidence; no defensible directional edge.",
+              long: {
+                choose_when:
+                  "Upward micro-momentum is stronger than downward micro-momentum for the next 60–120 seconds.",
+                evidence:
+                  "Even small positive 5s/30s movement, rising recent closes, a rebound, or short-window agreement can qualify.",
+                not_required:
+                  "Do not require a large breakout or agreement from every slower 5m indicator.",
+              },
+              short: {
+                choose_when:
+                  "Downward micro-momentum is stronger than upward micro-momentum for the next 60–120 seconds.",
+                evidence:
+                  "Even small negative 5s/30s movement, falling recent closes, a rejection, or short-window agreement can qualify.",
+                not_required:
+                  "Do not require a large breakdown or agreement from every slower 5m indicator.",
+              },
+              wait: {
+                choose_only_when:
+                  "The recent 5s/30s/60s path is genuinely flat, alternating, or contradictory enough that neither direction is stronger.",
+                not_for:
+                  "Do not choose wait merely because the raw move is small, confidence is imperfect, or trading costs exist. If one side has a modest coherent micro-edge, choose that side.",
+              },
             };
+        const instructions = position
+          ? `Choose exit or wait for this existing 60–120 second scalp at ${context.leverage}x nominal leverage. React to small adverse price changes because 0.01% raw is about ${(context.leverage * 0.01).toFixed(2)}% gross margin impact before costs. Use position side, age, raw and leveraged return, giveback, the newest 5s/30s movement, and reversal evidence. Protect margin without inventing a liquidation price.`
+          : `Choose the stronger near-term direction for a 60–120 second scalp at ${context.leverage}x nominal leverage. First compare long versus short using the newest 5s and 30s movement, recent closes, and 60s/120s context. Every non-flat price change matters: 0.01% raw is about ${(context.leverage * 0.01).toFixed(2)}% gross impact before costs. Prefer the stronger directional micro-bias even when the raw move is small. Use wait only when the path is truly flat, alternating, or directionally tied—not merely uncertain. Slow 5m indicators provide context but must not veto coherent recent movement. Leverage increases impact, not predictive edge.`;
         const response = await this.request(
           "https://api.typesafe.ai/v1/systemone",
           {
@@ -84,7 +116,7 @@ export class JevService {
               questions: {
                 action: {
                   type: "choice",
-                  instructions: `Choose the ${position ? "existing paper position's next action" : "entry"} for a 60–120 second scalp. This paper trade assumes ${context.leverage}x nominal leverage: every price change matters, and a 0.01% raw move is about ${(context.leverage * 0.01).toFixed(2)}% gross margin impact before costs. Weigh recent momentum, reversals, uncertainty, and trading costs; prioritize protecting margin from adverse moves. If present, use position side, age, raw return, leveraged impact, and giveback. Do not invent liquidation prices or treat leverage as extra predictive edge. This is a judgment, not a guaranteed forecast.`,
+                  instructions,
                   criteria,
                 },
               },

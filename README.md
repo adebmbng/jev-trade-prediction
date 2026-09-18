@@ -89,6 +89,7 @@ The browser receives public market data directly from Binance. The Fastify backe
 - The Jev request times out after 6 seconds. The browser stops waiting after 6.5 seconds.
 - Without `TYPESAFE_API_KEY`, the heuristic dashboard still works and the Jev panel explains that it is not configured.
 - Jev confidence describes answer concentration. It is not a win probability or proof that a trade is safe.
+- Entry choices deliberately favor the stronger micro-direction when small 5s/30s movement is coherent. `wait` is reserved for paths that are genuinely flat, alternating, or directionally tied.
 
 ## Quick start
 

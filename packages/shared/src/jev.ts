@@ -57,6 +57,12 @@ export function jevContext(
     s120: change(120),
     s300: change(300),
   };
+  const directionByWindow = Object.fromEntries(
+    Object.entries(changes).map(([key, value]) => [
+      key,
+      value > 0 ? "up" : value < 0 ? "down" : "flat",
+    ]),
+  );
   const indicators5m = Object.fromEntries(
     Object.entries(technical).map(([key, value]) => [
       key,
@@ -72,6 +78,7 @@ export function jevContext(
     windowStart: (end - 300) * 1000,
     windowEnd: end * 1000,
     changePct: changes,
+    directionByWindow,
     leveragedChangePct: Object.fromEntries(
       Object.entries(changes).map(([key, value]) => [
         key,

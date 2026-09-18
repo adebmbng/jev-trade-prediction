@@ -65,11 +65,16 @@ test("Jev batches one action, coalesces concurrent requests, caches, and never c
     assert.equal(body.state.bars5s.length, 60);
     assert.equal(body.state.leverage, 100);
     assert.equal(typeof body.state.leveragedChangePct.s30, "number");
+    assert.equal(body.state.directionByWindow.s5, "up");
     assert.match(
       body.questions.action.instructions,
-      /every price change matters/,
+      /Every non-flat price change matters/,
     );
     assert.match(body.questions.action.instructions, /100x nominal leverage/);
+    assert.match(
+      body.questions.action.criteria.wait.not_for,
+      /Do not choose wait merely because the raw move is small/,
+    );
     return Response.json(answer());
   };
   const service = new JevService("test", request, () => now);
