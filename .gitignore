@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.agents/
+skills-lock.json
+test-results/
+playwright-report/
+.DS_Store

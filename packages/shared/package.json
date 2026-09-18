@@ -1,0 +1,5 @@
+{
+  "name": "@jev/shared",
+  "private": true,
+  "type": "module"
+}

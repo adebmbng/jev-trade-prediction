@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:3001"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3001"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      JEV_LEVERAGE: ${JEV_LEVERAGE:-100}
+      BINANCE_REST: ${BINANCE_REST:-https://data-api.binance.vision}
+      BINANCE_WS: ${BINANCE_WS:-wss://data-stream.binance.vision}
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
