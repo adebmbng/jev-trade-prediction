@@ -1,4 +1,9 @@
-import { indicators, positionReturn, type Position } from "./analysis";
+import {
+  indicators,
+  multiTimeframeTrends,
+  positionReturn,
+  type Position,
+} from "./analysis";
 import { aggregate, type Market, type SymbolName } from "./market";
 
 export const DEFAULT_JEV_LEVERAGE = 100;
@@ -69,6 +74,11 @@ export function jevContext(
       typeof value === "number" ? compact(value) : value,
     ]),
   );
+  const timeframeTrends = multiTimeframeTrends(m.minutes).map((trend) => ({
+    ...trend,
+    changePct: compact(trend.changePct),
+    efficiency: compact(trend.efficiency),
+  }));
   return {
     symbol: m.symbol,
     asOf: now,
@@ -96,6 +106,7 @@ export function jevContext(
       compact(c.volume),
     ]),
     indicators5m,
+    timeframeTrends,
     position: position
       ? {
           ...position,
@@ -108,7 +119,7 @@ export function jevContext(
             (Math.abs(position.extreme - price) / position.entryPrice) * 100,
         }
       : null,
-    limitations: `${effectiveLeverage}x nominal leverage is assumed. Leveraged percentages are rough gross margin impact before fees, spread, slippage, maintenance margin, funding, and liquidation; no liquidation engine or order book is available. Indicators use closed 5m warm-up history; bars cover the last five minutes. No guaranteed future returns.`,
+    limitations: `${effectiveLeverage}x nominal leverage is assumed. Leveraged percentages are rough gross margin impact before fees, spread, slippage, maintenance margin, funding, and liquidation; no liquidation engine or order book is available. Timeframe trends use closed 1m candles; indicators use closed 5m warm-up history; bars cover the last five minutes. No guaranteed future returns.`,
   };
 }
 

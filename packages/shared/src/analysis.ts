@@ -1,6 +1,56 @@
 import { aggregate, type Candle, type Market, type SymbolName } from "./market";
 const mean = (a: number[]) => a.reduce((s, n) => s + n, 0) / a.length;
 const last = (a: number[]) => a[a.length - 1];
+
+export type WindowTrend = {
+  minutes: 15 | 30 | 60;
+  direction: "Bullish" | "Bearish" | "Mixed";
+  changePct: number;
+  efficiency: number;
+  available: boolean;
+};
+
+export const TREND_WINDOWS = [15, 30, 60] as const;
+
+export function multiTimeframeTrends(input: Candle[]): WindowTrend[] {
+  const closed = input.filter((c) => c.closed).sort((a, b) => a.time - b.time);
+  return TREND_WINDOWS.map((minutes) => {
+    const bars = closed.slice(-minutes);
+    const continuous =
+      bars.length === minutes &&
+      bars.every((bar, i) => i === 0 || bar.time - bars[i - 1].time === 60);
+    if (!continuous)
+      return {
+        minutes,
+        direction: "Mixed",
+        changePct: 0,
+        efficiency: 0,
+        available: false,
+      };
+
+    const start = bars[0].open;
+    const end = bars.at(-1)!.close;
+    const changePct = start ? (end / start - 1) * 100 : 0;
+    const center = (bars.length - 1) / 2;
+    const slope =
+      bars.reduce((sum, bar, i) => sum + (i - center) * bar.close, 0) /
+      bars.reduce((sum, _bar, i) => sum + (i - center) ** 2, 0);
+    const path = bars.reduce(
+      (sum, bar, i) =>
+        sum + Math.abs(bar.close - (i === 0 ? start : bars[i - 1].close)),
+      0,
+    );
+    const efficiency = path ? Math.min(1, Math.abs(end - start) / path) : 0;
+    const direction =
+      changePct > 0 && slope > 0
+        ? "Bullish"
+        : changePct < 0 && slope < 0
+          ? "Bearish"
+          : "Mixed";
+    return { minutes, direction, changePct, efficiency, available: true };
+  });
+}
+
 function smooth(a: number[], n: number, alpha = 2 / (n + 1)) {
   if (a.length < n) return [];
   const out = [mean(a.slice(0, n))];

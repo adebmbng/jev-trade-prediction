@@ -25,6 +25,7 @@ Short-horizon trading is noisy. A chart can show ten indicators and still leave 
 | Technical analysis       | EMA 9/21/50, SMA 200, RSI, MACD, ATR, ADX/DI, Bollinger bands, relative volume, OBV, support, and resistance.    |
 | Rolling forecasts        | Compare +5s, +30s, +1m, +2m, and +5m heuristic direction from a fresh reference price.                           |
 | Jev recommendation       | Get a typed `long`, `short`, or `wait` entry judgment for a 60–120 second objective.                             |
+| Multi-timeframe trend    | Compare independent 15m, 30m, and 1h direction from closed one-minute candles without hiding tiny moves.         |
 | Position-aware follow-up | After entry, Jev changes the question to `exit` or `wait` using side, age, return, giveback, and market context. |
 | 100× leverage awareness  | Raw price changes are translated into approximate leveraged gross impact so tiny moves are treated as material.  |
 | Honest refresh behavior  | The previous recommendation stays readable while a spinner marks the next Jev call as in flight.                 |
@@ -54,6 +55,7 @@ The state sent to Jev includes:
 - the previous five minutes of continuous market data, compressed into 5s OHLCV bars;
 - exact 5s, 30s, 60s, 120s, and 300s price changes;
 - technical indicators calculated from closed 5m candles;
+- independent 15m, 30m, and 1h path direction, exact change, and directional efficiency from closed 1m candles;
 - the configured leverage and approximate leveraged move impact;
 - position side, entry price, age, raw return, observed best price, and giveback after entry;
 - explicit limitations around fees, funding, slippage, maintenance margin, liquidation, and unavailable order-book data.
@@ -172,7 +174,7 @@ tests                    Deterministic unit tests and mocked browser behavior
 
 The frontend derives 5s and 30s candles from Binance 1s klines and uses native 1m/5m history. Gold horizontal segments mark each 5m opening; dotted vertical lines mark its boundaries. Chart controls do not change the 5m analysis timeframe.
 
-The heuristic provider publishes rolling +5s/+30s/+1m/+2m/+5m estimates every five seconds. Each refresh receives a new reference price and target timestamp. These uncalibrated strength scores provide a deterministic baseline beside Jev's typed judgment.
+The heuristic provider publishes rolling +5s/+30s/+1m/+2m/+5m estimates every five seconds. Each refresh receives a new reference price and target timestamp. The trend panel separately measures 15m, 30m, and 1h paths from native closed one-minute candles; direction requires the net move and regression slope to agree, while directional efficiency reveals whether the path was clean or choppy. There is no minimum movement threshold, so a small coherent move is still visible. These measurements provide a deterministic baseline beside Jev's typed judgment.
 
 ## Contributing
 

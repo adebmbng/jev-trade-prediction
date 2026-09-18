@@ -10,6 +10,7 @@ import {
 import {
   guidance,
   indicators,
+  multiTimeframeTrends,
   PREDICTION_HORIZONS,
   positionReturn,
   type Forecast,
@@ -112,6 +113,10 @@ function App() {
   const analysis = useMemo(
     () => (matches ? indicators(market.five) : null),
     [market.five, matches],
+  );
+  const timeframeTrends = useMemo(
+    () => (matches ? multiTimeframeTrends(market.minutes) : []),
+    [market.minutes, matches],
   );
   const position = positions[symbol];
   useEffect(() => {
@@ -221,11 +226,37 @@ function App() {
       <div className="analysis-grid">
         <section className="analysis section">
           <div className="section-heading">
-            <h2>Trend direction</h2>
-            <span>Closed 5m candles</span>
+            <h2>Multi-timeframe trend</h2>
+            <span>Closed 1m candles</span>
           </div>
-          <div className="trend-row">
-            <strong
+          <div className="timeframe-trends">
+            {timeframeTrends.map((trend) => (
+              <article key={trend.minutes}>
+                <span>{trend.minutes === 60 ? "1h" : `${trend.minutes}m`}</span>
+                <strong
+                  className={
+                    trend.direction === "Bullish"
+                      ? "up"
+                      : trend.direction === "Bearish"
+                        ? "down"
+                        : ""
+                  }
+                >
+                  {trend.available
+                    ? `${trend.direction === "Bullish" ? "↗" : trend.direction === "Bearish" ? "↘" : "↔"} ${trend.direction}`
+                    : "Warming up"}
+                </strong>
+                <small>
+                  {trend.available
+                    ? `${trend.changePct >= 0 ? "+" : ""}${trend.changePct.toFixed(3)}% · ${(trend.efficiency * 100).toFixed(0)}% clean`
+                    : `Need ${trend.minutes} closed bars`}
+                </small>
+              </article>
+            ))}
+          </div>
+          <div className="trend-row broader-trend">
+            <strong>5m EMA context</strong>
+            <span
               className={
                 analysis?.trend === "Bullish"
                   ? "up"
@@ -234,17 +265,9 @@ function App() {
                     : ""
               }
             >
-              {analysis?.trend ?? "Warming up"}{" "}
-              {analysis?.trend === "Bullish"
-                ? "↗"
-                : analysis?.trend === "Bearish"
-                  ? "↘"
-                  : "↔"}
-            </strong>
-            <span>
               {analysis
-                ? `${analysis.adx >= 25 ? "Trending" : "Ranging"} · ADX ${analysis.adx.toFixed(0)}`
-                : "Loading 5m history"}
+                ? `${analysis.trend} · ${analysis.adx >= 25 ? "Trending" : "Ranging"} · ADX ${analysis.adx.toFixed(0)}`
+                : "Loading history"}
             </span>
           </div>
           <div className="metrics">

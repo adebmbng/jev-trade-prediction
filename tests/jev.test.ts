@@ -26,6 +26,9 @@ const market = () => ({
   seconds: Array.from({ length: 300 }, (_, i) =>
     candle(now / 1000 - 300 + i, 100 + i / 1000),
   ),
+  minutes: Array.from({ length: 60 }, (_, i) =>
+    candle(now / 1000 - 3600 + i * 60, 100 + i / 1000),
+  ),
   five: Array.from({ length: 250 }, (_, i) =>
     candle(now / 1000 - 75000 + i * 300, 100 + i / 1000),
   ),
@@ -49,6 +52,10 @@ test("context covers five minutes, preserves tiny changes, rejects gaps and stal
   assert.equal(context.windowStart, now - 300000);
   assert.ok(context.changePct.s5 > 0 && context.changePct.s5 < 0.01);
   assert.ok(context.indicators5m.sma200);
+  assert.deepEqual(
+    context.timeframeTrends.map((trend) => trend.minutes),
+    [15, 30, 60],
+  );
   assert.equal(jevContext({ ...m, seconds: m.seconds.slice(1) }, now), null);
   assert.equal(jevContext({ ...m, updatedAt: now - 10000 }, now), null);
   assert.equal(jevContext({ ...m, updatedAt: now + 1 }, now), null);
@@ -66,6 +73,7 @@ test("Jev batches one action, coalesces concurrent requests, caches, and never c
     assert.equal(body.state.leverage, 100);
     assert.equal(typeof body.state.leveragedChangePct.s30, "number");
     assert.equal(body.state.directionByWindow.s5, "up");
+    assert.equal(body.state.timeframeTrends[2].direction, "Bullish");
     assert.match(
       body.questions.action.instructions,
       /Every non-flat price change matters/,

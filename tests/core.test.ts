@@ -7,6 +7,7 @@ import {
 } from "../packages/shared/src/market";
 import {
   indicators,
+  multiTimeframeTrends,
   HeuristicProvider,
   PREDICTION_HORIZONS,
   positionReturn,
@@ -68,6 +69,33 @@ test("flat and rising indicator fixtures, including Wilder RSI and SMA", () => {
   assert.equal(rising.trend, "Bullish");
   assert.equal(rising.adx, 100);
   assert.equal(indicators(flat.slice(0, 199)), null);
+});
+test("15m, 30m, and 1h trends use exact closed 1m paths, including tiny moves", () => {
+  const rising = Array.from({ length: 60 }, (_, i) => ({
+    ...candle(i * 60, 100 + i * 0.00001),
+    open: 100 + i * 0.00001,
+    close: 100 + (i + 1) * 0.00001,
+  }));
+  const trends = multiTimeframeTrends(rising);
+  assert.deepEqual(
+    trends.map((trend) => [trend.minutes, trend.direction, trend.available]),
+    [
+      [15, "Bullish", true],
+      [30, "Bullish", true],
+      [60, "Bullish", true],
+    ],
+  );
+  assert.ok(trends.every((trend) => trend.changePct > 0));
+  const falling = multiTimeframeTrends(
+    rising.map((bar, i) => ({
+      ...bar,
+      open: 100 - i * 0.001,
+      close: 100 - (i + 1) * 0.001,
+    })),
+  );
+  assert.ok(falling.every((trend) => trend.direction === "Bearish"));
+  const gapped = rising.filter((_, i) => i !== 30);
+  assert.equal(multiTimeframeTrends(gapped).at(-1)!.available, false);
 });
 test("forecast timestamps, stale data, gaps, and future-data isolation", () => {
   const now = 90000000,
