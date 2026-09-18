@@ -2,6 +2,12 @@
 
 Mobile-first BTCUSDT / ETHUSDT dashboard: live candles, 5m opening-price sections, technical indicators, backend heuristic forecasts, and browser-local paper positions.
 
+## TypeSafe AI and Jev
+
+This project uses [TypeSafe AI](https://typesafe.ai/) and its Jev System One model as a small, typed judgment inside the trading workflow. Jev does not generate the dashboard or place orders. The application sends structured market state and one narrow Choice question to the TypeSafe API; Jev returns a selected action, probabilities, and confidence, which the server validates and the UI combines with deterministic indicators and paper-position facts.
+
+The Jev request stays server-side so `TYPESAFE_API_KEY` never reaches the browser. The state includes the recent five-minute price path, exact short-horizon price changes, closed-candle technical indicators, and—after entry—the position side, age, return, leverage impact, and giveback. Code owns freshness checks, caching, request limits, risk disclosures, sarcastic commentary, and all trading behavior. The model's confidence is not a win probability, and Jev recommendations are advisory paper-trade signals only.
+
 ## Run
 
 Node.js 22.12+ (24 recommended), pnpm 9+:
