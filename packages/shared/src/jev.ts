@@ -35,6 +35,14 @@ export function jevContext(
     Number.isFinite(leverage) && leverage >= 1
       ? compact(leverage)
       : DEFAULT_JEV_LEVERAGE;
+  const sessionStart = Math.floor(now / 300000) * 300000;
+  const sessionEnd = sessionStart + 300000;
+  const sessionElapsedSeconds = compact(
+    Math.max(0, (now - sessionStart) / 1000),
+  );
+  const sessionRemainingSeconds = compact(
+    Math.max(0, (sessionEnd - now) / 1000),
+  );
   const end = Math.floor(now / 1000);
   const seconds = m.seconds.filter(
     (c) => c.closed && c.time >= end - 300 && c.time < end,
@@ -82,7 +90,18 @@ export function jevContext(
   return {
     symbol: m.symbol,
     asOf: now,
-    objectiveSeconds: [60, 120],
+    objectiveSeconds: position ? [300] : [60, 120],
+    decisionWindow: position
+      ? {
+          type: "current_5m_session",
+          endAt: sessionEnd,
+          remainingSeconds: sessionRemainingSeconds,
+        }
+      : {
+          type: "near_term_scalp",
+          endAt: null,
+          remainingSeconds: null,
+        },
     leverage: effectiveLeverage,
     price: compact(price),
     windowStart: (end - 300) * 1000,
@@ -107,9 +126,16 @@ export function jevContext(
     ]),
     indicators5m,
     timeframeTrends,
+    fiveMinuteSession: {
+      start: sessionStart,
+      end: sessionEnd,
+      elapsedSeconds: sessionElapsedSeconds,
+      remainingSeconds: sessionRemainingSeconds,
+    },
     position: position
       ? {
           ...position,
+          openedDuringCurrentSession: position.openedAt >= sessionStart,
           elapsedSeconds: Math.max(0, (now - position.openedAt) / 1000),
           grossReturnPct: positionReturn(position, price),
           leveragedGrossReturnPct: compact(
@@ -132,9 +158,10 @@ export function jevCommentary(
   if (!p)
     return `${action === "long" ? "Long bias" : action === "short" ? "Short bias" : "Wait"} for the next 1–2 minutes. ${move} ${action === "wait" ? "Apparently doing nothing is also a strategy. Shocking." : "A tiny move is still a move. Fees, tragically, also exist."}`;
   const status = `${p.side} at ${p.entryPrice}; ${p.grossReturnPct.toFixed(4)}% raw, about ${p.leveragedGrossReturnPct.toFixed(2)}% at ${context.leverage}x before costs, after ${Math.floor(p.elapsedSeconds)}s.`;
+  const session = `The current 5m session ends in ${Math.ceil(context.fiveMinuteSession.remainingSeconds)}s.`;
   if (action === "exit")
-    return `${p.side === "long" ? "Sell / close" : "Buy to cover / close"} bias. ${status} The plan was a scalp, not a lifelong emotional attachment. ${move}`;
-  return `Wait / hold bias. ${status} Keep watching; the candle has not signed a loyalty contract. ${move}${p.elapsedSeconds >= 120 ? " Your two-minute window has expired. Congratulations on inventing a longer trade; reassess now." : ""}`;
+    return `${p.side === "long" ? "Sell / close" : "Buy to cover / close"} now bias. ${status} Realize the position now rather than wait for the session end. The plan was a scalp, not a lifelong emotional attachment. ${move}`;
+  return `Wait / hold until the current 5m session ends. ${status} Keep watching; the candle has not signed a loyalty contract. ${move} ${session}`;
 }
 
 export function jevContrarianComment(

@@ -108,7 +108,7 @@ export function JevRecommendation({
               {stale ? "◷ Previous" : "✓ Ready"}
             </span>
           ) : (
-            "1–2 minute scalp"
+            active?.context?.position ? "5m position decision" : "1–2 minute scalp"
           )}
         </span>
       </div>
@@ -162,6 +162,13 @@ export function JevRecommendation({
                 to {new Date(active.context.windowEnd).toLocaleTimeString()}.
                 Reference price: {active.context.price}. Nominal leverage:{" "}
                 {active.context.leverage}×.
+              </p>
+              <p>
+                Current 5m session ends at{" "}
+                {new Date(active.context.fiveMinuteSession.end).toLocaleTimeString()}{" "}
+                ({Math.ceil(active.context.fiveMinuteSession.remainingSeconds)}s
+                remaining). With an open position, Jev chooses between closing
+                now and waiting for this session to end.
               </p>
               <dl>
                 {Object.entries(active.context.changePct).map(

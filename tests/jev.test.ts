@@ -50,6 +50,10 @@ test("context covers five minutes, preserves tiny changes, rejects gaps and stal
   const context = jevContext(m, now)!;
   assert.equal(context.bars5s.length, 60);
   assert.equal(context.windowStart, now - 300000);
+  assert.equal(context.fiveMinuteSession.start, now);
+  assert.equal(context.fiveMinuteSession.end, now + 300000);
+  assert.equal(context.fiveMinuteSession.remainingSeconds, 300);
+  assert.equal(context.decisionWindow.type, "near_term_scalp");
   assert.ok(context.changePct.s5 > 0 && context.changePct.s5 < 0.01);
   assert.ok(context.indicators5m.sma200);
   assert.deepEqual(
@@ -74,6 +78,8 @@ test("Jev batches one action, coalesces concurrent requests, caches, and never c
     assert.equal(typeof body.state.leveragedChangePct.s30, "number");
     assert.equal(body.state.directionByWindow.s5, "up");
     assert.equal(body.state.timeframeTrends[2].direction, "Bullish");
+    assert.equal(body.state.fiveMinuteSession.remainingSeconds, 300);
+    assert.equal(body.state.decisionWindow.type, "near_term_scalp");
     assert.match(
       body.questions.action.instructions,
       /Every non-flat price change matters/,
@@ -151,6 +157,9 @@ test("entry context changes the judgment; exit wording respects short positions"
       const body = JSON.parse(init!.body as string);
       assert.equal(body.state.position.elapsedSeconds, 121);
       assert.equal(body.state.leverage, 100);
+      assert.equal(body.state.decisionWindow.type, "current_5m_session");
+      assert.equal(body.state.decisionWindow.remainingSeconds, 300);
+      assert.equal(body.state.position.openedDuringCurrentSession, false);
       assert.equal(
         typeof body.state.position.leveragedGrossReturnPct,
         "number",
@@ -159,6 +168,18 @@ test("entry context changes the judgment; exit wording respects short positions"
         "exit",
         "wait",
       ]);
+      assert.match(
+        body.questions.action.instructions,
+        /Choose only exit or wait.*current 5m session/s,
+      );
+      assert.match(
+        body.questions.action.criteria.exit.choose_when,
+        /Take profit or close.*current 5m session/,
+      );
+      assert.match(
+        body.questions.action.criteria.wait.choose_when,
+        /wait until the current 5m session ends/,
+      );
       return Response.json({
         answers: {
           action: {
@@ -174,7 +195,7 @@ test("entry context changes the judgment; exit wording respects short positions"
   );
   const result = await service.recommend(market(), position);
   assert.match(result.commentary!, /Buy to cover/);
-  assert.match(jevCommentary("wait", result.context!), /window has expired/);
+  assert.match(jevCommentary("wait", result.context!), /current 5m session ends/);
 });
 
 test("contrarian position comment calls out disagreement with the pre-entry signal", () => {

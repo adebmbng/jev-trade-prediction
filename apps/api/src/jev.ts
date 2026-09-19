@@ -46,6 +46,7 @@ export class JevService {
       position?.side,
       position?.entryPrice,
       position?.openedAt,
+      context.fiveMinuteSession.start,
     ]);
     const cached = this.cache.get(key);
     if (cached && cached.expiresAt > now) return cached;
@@ -63,15 +64,15 @@ export class JevService {
           ? {
               exit: {
                 choose_when:
-                  "The newest micro-movement is adverse to the held side, momentum has reversed, giveback is growing, or the 60–120 second objective has elapsed.",
+                  "Take profit or close the position now instead of waiting for the current 5m session to end when the held side has weakened, momentum has reversed, giveback is growing, or the current reward is no longer worth the remaining session risk. If the position is losing, exit means reduce exposure, not take profit.",
                 sensitivity:
                   "At the configured leverage, a small adverse raw move is meaningful; a dramatic reversal is not required.",
               },
               wait: {
                 choose_when:
-                  "The newest micro-movement still supports the held side and no credible reversal or material giveback is visible.",
+                  "Keep the position open and wait until the current 5m session ends when the held side remains supported and no credible reversal or material giveback is visible.",
                 not_for:
-                  "Do not retain only because the raw movement looks small; judge its leveraged impact.",
+                  "Do not retain only because the raw movement looks small, and do not reinterpret wait as a separate 60–120 second objective; judge the remaining current-session risk and leveraged impact.",
               },
             }
           : {
@@ -99,7 +100,7 @@ export class JevService {
               },
             };
         const instructions = position
-          ? `Choose exit or wait for this existing 60–120 second scalp at ${context.leverage}x nominal leverage. React to small adverse price changes because 0.01% raw is about ${(context.leverage * 0.01).toFixed(2)}% gross margin impact before costs. Use position side, age, raw and leveraged return, giveback, the newest 5s/30s movement, and reversal evidence. Protect margin without inventing a liquidation price.`
+          ? `Choose only exit or wait for this open position within the current 5m session. Exit means take profit or close now; wait means keep the position open until the current session ends at ${context.fiveMinuteSession.end} (${context.fiveMinuteSession.remainingSeconds}s remain), not until a separate 60–120 second objective. React to small adverse price changes because 0.01% raw is about ${(context.leverage * 0.01).toFixed(2)}% gross margin impact before costs. Use position side, whether it opened during this session, age, raw and leveraged return, giveback, the newest 5s/30s movement, and reversal evidence. Protect margin without inventing a liquidation price.`
           : `Choose the stronger near-term direction for a 60–120 second scalp at ${context.leverage}x nominal leverage. First compare long versus short using the newest 5s and 30s movement, recent closes, and 60s/120s context. Every non-flat price change matters: 0.01% raw is about ${(context.leverage * 0.01).toFixed(2)}% gross impact before costs. Prefer the stronger directional micro-bias even when the raw move is small. Use wait only when the path is truly flat, alternating, or directionally tied—not merely uncertain. The 15m/30m/1h timeframe trends are measured context: agreement can reinforce a choice and disagreement can flag a countertrend scalp, but they must not veto coherent recent movement. Slow 5m indicators provide context under the same rule. Leverage increases impact, not predictive edge.`;
         const response = await this.request(
           "https://api.typesafe.ai/v1/systemone",
@@ -150,7 +151,11 @@ export class JevService {
           ) > 0.02
         )
           throw new Error("Invalid answer");
-        if (this.clock() >= now + 15000)
+        const expiresAt = Math.min(
+          now + 15000,
+          context.fiveMinuteSession.end,
+        );
+        if (this.clock() >= expiresAt)
           return unavailable(
             "Jev response expired; waiting for a fresh evaluation.",
           );
@@ -158,7 +163,7 @@ export class JevService {
           symbol: market.symbol,
           available: true,
           asOf: now,
-          expiresAt: now + 15000,
+          expiresAt,
           model: typeof body.model === "string" ? body.model : "jev-latest",
           action: a.choice,
           confidence: a.confidence,

@@ -11,7 +11,7 @@ Jev Trade turns fast BTCUSDT and ETHUSDT market movement into one focused view: 
 
 The product is built around a simple question:
 
-> Given what the market has done over the last five minutes, what is the most defensible action for the next one or two minutes?
+> Given what the market has done over the last five minutes, what is the most defensible action for the next one or two minutes—and, once in a position, should it be closed now or held until the current five-minute session ends?
 
 It is deliberately opinionated, transparent, and experimental. The app shows its inputs, keeps stale recommendations visibly marked, never invents prices when feeds fail, and never places an order for you.
 
@@ -26,7 +26,7 @@ Short-horizon trading is noisy. A chart can show ten indicators and still leave 
 | Rolling forecasts        | Compare +5s, +30s, +1m, +2m, and +5m heuristic direction from a fresh reference price.                           |
 | Jev recommendation       | Get a typed `long`, `short`, or `wait` entry judgment for a 60–120 second objective.                             |
 | Multi-timeframe trend    | Compare independent 15m, 30m, and 1h direction from closed one-minute candles without hiding tiny moves.         |
-| Position-aware follow-up | After entry, Jev changes the question to `exit` or `wait` using side, age, return, giveback, and market context. |
+| Position-aware follow-up | After entry, Jev chooses `exit` now or `wait` until the current 5m session ends using side, age, return, giveback, and market context. |
 | 100× leverage awareness  | Raw price changes are translated into approximate leveraged gross impact so tiny moves are treated as material.  |
 | Honest refresh behavior  | The previous recommendation stays readable while a spinner marks the next Jev call as in flight.                 |
 | Paper positions          | Experiment locally in the browser without exchange keys, accounts, or automatic execution.                       |
@@ -57,6 +57,7 @@ The state sent to Jev includes:
 - technical indicators calculated from closed 5m candles;
 - independent 15m, 30m, and 1h path direction, exact change, and directional efficiency from closed 1m candles;
 - the configured leverage and approximate leveraged move impact;
+- the current wall-clock 5m session start, end, and seconds remaining;
 - position side, entry price, age, raw return, observed best price, and giveback after entry;
 - explicit limitations around fees, funding, slippage, maintenance margin, liquidation, and unavailable order-book data.
 
@@ -87,11 +88,13 @@ The browser receives public market data directly from Binance. The Fastify backe
 
 - Jev is called immediately when fresh data becomes available, when the symbol changes, and when a position is opened. It refreshes every 15 seconds after the previous call completes.
 - A successful recommendation is valid for 15 seconds. The last successful result remains visible as **Previous** while its replacement loads.
+- For an open position, the recommendation also expires at the current 5m session boundary so a `wait` decision cannot carry into the next session.
 - The server allows at most 12 Jev calls per minute per process and applies a 30-second cooldown after provider failures.
 - The Jev request times out after 6 seconds. The browser stops waiting after 6.5 seconds.
 - Without `TYPESAFE_API_KEY`, the heuristic dashboard still works and the Jev panel explains that it is not configured.
 - Jev confidence describes answer concentration. It is not a win probability or proof that a trade is safe.
 - Entry choices deliberately favor the stronger micro-direction when small 5s/30s movement is coherent. `wait` is reserved for paths that are genuinely flat, alternating, or directionally tied.
+- Position choices are deliberately binary: `exit` means take profit or close now; `wait` means keep the position open until the current 5m session ends. If the position is losing, `exit` means reducing exposure, not taking profit.
 
 ## Quick start
 
