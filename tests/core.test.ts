@@ -112,7 +112,9 @@ test("the optional 5m trend uses closed 5m candles and paper trades have a 5m cl
     [[5, "Bullish", true], [15, "Mixed", false], [30, "Mixed", false], [60, "Mixed", false]],
   );
   assert.equal(FAST_RSI_PERIOD, 7);
-  assert.equal(paperTradeCloseAt(1000), 301000);
+  assert.equal(paperTradeCloseAt(1000), 300000);
+  assert.equal(paperTradeCloseAt(300000), 600000);
+  assert.equal(paperTradeCloseAt(301000), 600000);
   assert.equal(tradeOutcome(0.01), "win");
   assert.equal(tradeOutcome(0), "lose");
   assert.equal(tradeOutcome(-0.01), "lose");

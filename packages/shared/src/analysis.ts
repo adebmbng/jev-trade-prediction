@@ -13,7 +13,7 @@ export type WindowTrend = {
 export const TREND_WINDOWS = [15, 30, 60] as const;
 
 export const FAST_RSI_PERIOD = 7;
-export const PAPER_TRADE_DURATION_MS = 5 * 60 * 1000;
+export const PAPER_TRADE_WINDOW_MS = 5 * 60 * 1000;
 
 export type TradeRecord = {
   id: string;
@@ -29,7 +29,7 @@ export type TradeRecord = {
 };
 
 export const paperTradeCloseAt = (openedAt: number) =>
-  openedAt + PAPER_TRADE_DURATION_MS;
+  (Math.floor(openedAt / PAPER_TRADE_WINDOW_MS) + 1) * PAPER_TRADE_WINDOW_MS;
 
 export const tradeOutcome = (pnlPct: number): TradeRecord["outcome"] =>
   pnlPct > 0 ? "win" : "lose";

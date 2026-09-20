@@ -497,7 +497,7 @@ function App() {
             )}
             <p className="caption">
               {Math.max(0, Math.floor((now - position.openedAt) / 60000))}m open
-              · Auto-closes in {Math.max(0, Math.ceil((paperTradeCloseAt(position.openedAt) - now) / 1000))}s
+              · Auto-closes at the next 5m close in {Math.max(0, Math.ceil((paperTradeCloseAt(position.openedAt) - now) / 1000))}s
               · Raw price return
               {analysis
                 ? ` · ATR trail ${money(position.extreme + (position.side === "long" ? -analysis.atr : analysis.atr))}`
