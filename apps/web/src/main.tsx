@@ -28,6 +28,7 @@ import {
 import { Chart } from "./Chart";
 import { JevRecommendation } from "./JevRecommendation";
 import "./style.css";
+const SHOW_JEV_RECOMMENDATION = import.meta.env.VITE_SHOW_JEV !== "false";
 const key = "jev.positions.v1";
 const historyKey = "jev.trade-history.v1";
 const MAX_TRADE_HISTORY = 100;
@@ -307,7 +308,7 @@ function App() {
           until the feed is ready.
         </p>
       )}
-      <div className="analysis-grid">
+      <div className={SHOW_JEV_RECOMMENDATION ? "analysis-grid" : undefined}>
         <section className="analysis section">
           <div className="section-heading">
             <h2>Multi-timeframe trend</h2>
@@ -416,13 +417,15 @@ function App() {
             </p>
           </details>
         </section>
-        <JevRecommendation
-          symbol={symbol}
-          position={position}
-          fresh={fresh}
-          now={now}
-          onResult={setJevResult}
-        />
+        {SHOW_JEV_RECOMMENDATION && (
+          <JevRecommendation
+            symbol={symbol}
+            position={position}
+            fresh={fresh}
+            now={now}
+            onResult={setJevResult}
+          />
+        )}
       </div>
       <section className="section">
         <div className="section-heading">

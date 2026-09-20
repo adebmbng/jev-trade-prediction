@@ -91,7 +91,7 @@ The browser receives public market data directly from Binance. The Fastify backe
 - For an open position, the recommendation also expires at the current 5m session boundary so a `wait` decision cannot carry into the next session.
 - The server allows at most 12 Jev calls per minute per process and applies a 30-second cooldown after provider failures.
 - The Jev request times out after 6 seconds. The browser stops waiting after 6.5 seconds.
-- Without `TYPESAFE_API_KEY`, the heuristic dashboard still works and the Jev panel explains that it is not configured.
+- Set `VITE_SHOW_JEV=false` when the raw dashboard signals are sufficient; the Jev panel stays hidden and the browser makes no Jev requests.
 - Jev confidence describes answer concentration. It is not a win probability or proof that a trade is safe.
 - Entry choices deliberately favor the stronger micro-direction when small 5s/30s movement is coherent. `wait` is reserved for paths that are genuinely flat, alternating, or directionally tied.
 - Position choices are deliberately binary: `exit` means take profit or close now; `wait` means keep the position open until the current 5m session ends. If the position is losing, `exit` means reducing exposure, not taking profit.
@@ -116,6 +116,7 @@ cp .env.example .env
 ```env
 TYPESAFE_API_KEY=your_key_here
 JEV_LEVERAGE=100
+VITE_SHOW_JEV=false
 ```
 
 Start both processes with environment variables loaded:
@@ -142,6 +143,7 @@ Useful `.env` settings:
 | ------------------ | --------------------- | ------------------------------------------------------------------------------------ |
 | `TYPESAFE_API_KEY` | empty                 | Enables server-side Jev recommendations.                                             |
 | `JEV_LEVERAGE`     | `100`                 | Nominal leverage supplied to Jev and used for approximate gross impact.              |
+| `VITE_SHOW_JEV`    | `false`               | Set `true` to show the Jev recommendation section in the frontend.                    |
 | `APP_PORT`         | `8080`                | Host port exposed by Docker Compose.                                                 |
 | `BIND_ADDRESS`     | `0.0.0.0`             | Host interface used by Docker Compose. Use `127.0.0.1` behind a local reverse proxy. |
 | `TRUSTED_PROXIES`  | empty                 | Trusted proxy IP/CIDR list used for correct client rate limiting.                    |
