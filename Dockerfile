@@ -7,6 +7,8 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 
 FROM base AS build
+ARG VITE_SHOW_JEV=false
+ENV VITE_SHOW_JEV=${VITE_SHOW_JEV}
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build

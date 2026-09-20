@@ -28,7 +28,8 @@ import {
 import { Chart } from "./Chart";
 import { JevRecommendation } from "./JevRecommendation";
 import "./style.css";
-const SHOW_JEV_RECOMMENDATION = import.meta.env.VITE_SHOW_JEV !== "false";
+const SHOW_JEV_RECOMMENDATION =
+  import.meta.env.VITE_SHOW_JEV?.trim().toLowerCase() === "true";
 const key = "jev.positions.v1";
 const historyKey = "jev.trade-history.v1";
 const MAX_TRADE_HISTORY = 100;

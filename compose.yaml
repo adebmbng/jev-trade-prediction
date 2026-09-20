@@ -1,6 +1,9 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_SHOW_JEV: ${VITE_SHOW_JEV:-false}
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:3001"
     environment:
