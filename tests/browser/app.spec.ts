@@ -147,6 +147,7 @@ test("mobile live chart, intervals, positions, refresh and symbol isolation", as
   await page.screenshot({ path: "test-results/mobile.png", fullPage: true });
   await page.getByRole("button", { name: "Close position" }).click();
   await expect(page.getByRole("button", { name: "Go long" })).toBeVisible();
+  await expect(page.getByText(/Win|Lose/).first()).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

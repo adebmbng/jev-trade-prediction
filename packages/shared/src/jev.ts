@@ -1,4 +1,5 @@
 import {
+  FAST_RSI_PERIOD,
   indicators,
   multiTimeframeTrends,
   positionReturn,
@@ -82,7 +83,9 @@ export function jevContext(
       typeof value === "number" ? compact(value) : value,
     ]),
   );
-  const timeframeTrends = multiTimeframeTrends(m.minutes).map((trend) => ({
+  const trends = multiTimeframeTrends(m.minutes, m.five);
+  const fiveMinuteTrend = trends[0];
+  const timeframeTrends = trends.slice(1).map((trend) => ({
     ...trend,
     changePct: compact(trend.changePct),
     efficiency: compact(trend.efficiency),
@@ -125,6 +128,11 @@ export function jevContext(
       compact(c.volume),
     ]),
     indicators5m,
+    fiveMinuteTrend: {
+      ...fiveMinuteTrend,
+      changePct: compact(fiveMinuteTrend.changePct),
+      efficiency: compact(fiveMinuteTrend.efficiency),
+    },
     timeframeTrends,
     fiveMinuteSession: {
       start: sessionStart,
@@ -145,7 +153,7 @@ export function jevContext(
             (Math.abs(position.extreme - price) / position.entryPrice) * 100,
         }
       : null,
-    limitations: `${effectiveLeverage}x nominal leverage is assumed. Leveraged percentages are rough gross margin impact before fees, spread, slippage, maintenance margin, funding, and liquidation; no liquidation engine or order book is available. Timeframe trends use closed 1m candles; indicators use closed 5m warm-up history; bars cover the last five minutes. No guaranteed future returns.`,
+    limitations: `${effectiveLeverage}x nominal leverage is assumed. Leveraged percentages are rough gross margin impact before fees, spread, slippage, maintenance margin, funding, and liquidation; no liquidation engine or order book is available. The 5m trend uses closed 5m candles; 15m/30m/1h trends use closed 1m candles; indicators use closed 5m warm-up history with a faster RSI-${FAST_RSI_PERIOD}; bars cover the last five minutes. No guaranteed future returns.`,
   };
 }
 

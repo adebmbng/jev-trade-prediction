@@ -6,11 +6,14 @@ import {
   type Candle,
 } from "../packages/shared/src/market";
 import {
+  FAST_RSI_PERIOD,
   indicators,
   multiTimeframeTrends,
   HeuristicProvider,
+  paperTradeCloseAt,
   PREDICTION_HORIZONS,
   positionReturn,
+  tradeOutcome,
   guidance,
   type Position,
 } from "../packages/shared/src/analysis";
@@ -96,6 +99,23 @@ test("15m, 30m, and 1h trends use exact closed 1m paths, including tiny moves", 
   assert.ok(falling.every((trend) => trend.direction === "Bearish"));
   const gapped = rising.filter((_, i) => i !== 30);
   assert.equal(multiTimeframeTrends(gapped).at(-1)!.available, false);
+});
+test("the optional 5m trend uses closed 5m candles and paper trades have a 5m clock", () => {
+  const five = Array.from({ length: 5 }, (_, i) => ({
+    ...candle(i * 300, 100 + i),
+    open: 100 + i,
+    close: 101 + i,
+  }));
+  const trends = multiTimeframeTrends([], five);
+  assert.deepEqual(
+    trends.map((trend) => [trend.minutes, trend.direction, trend.available]),
+    [[5, "Bullish", true], [15, "Mixed", false], [30, "Mixed", false], [60, "Mixed", false]],
+  );
+  assert.equal(FAST_RSI_PERIOD, 7);
+  assert.equal(paperTradeCloseAt(1000), 301000);
+  assert.equal(tradeOutcome(0.01), "win");
+  assert.equal(tradeOutcome(0), "lose");
+  assert.equal(tradeOutcome(-0.01), "lose");
 });
 test("forecast timestamps, stale data, gaps, and future-data isolation", () => {
   const now = 90000000,

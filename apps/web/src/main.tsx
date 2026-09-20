@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   aggregate,
@@ -8,13 +8,17 @@ import {
   type SymbolName,
 } from "../../../packages/shared/src/market";
 import {
+  FAST_RSI_PERIOD,
   guidance,
   indicators,
   multiTimeframeTrends,
+  paperTradeCloseAt,
   PREDICTION_HORIZONS,
   positionReturn,
+  tradeOutcome,
   type Forecast,
   type Position,
+  type TradeRecord,
 } from "../../../packages/shared/src/analysis";
 import {
   DEFAULT_JEV_LEVERAGE,
@@ -25,6 +29,8 @@ import { Chart } from "./Chart";
 import { JevRecommendation } from "./JevRecommendation";
 import "./style.css";
 const key = "jev.positions.v1";
+const historyKey = "jev.trade-history.v1";
+const MAX_TRADE_HISTORY = 100;
 const money = (n: number | undefined) =>
   n === undefined
     ? "—"
@@ -52,6 +58,52 @@ function loadPositions(): Partial<Record<SymbolName, Position>> {
     return {};
   }
 }
+function loadTradeHistory(): TradeRecord[] {
+  try {
+    const data = JSON.parse(localStorage.getItem(historyKey) ?? "[]");
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter(
+        (trade): trade is TradeRecord =>
+          trade &&
+          typeof trade.id === "string" &&
+          SYMBOLS.includes(trade.symbol) &&
+          ["long", "short"].includes(trade.side) &&
+          [
+            trade.entryPrice,
+            trade.exitPrice,
+            trade.openedAt,
+            trade.closedAt,
+            trade.pnlPct,
+          ].every((v) => typeof v === "number" && Number.isFinite(v)) &&
+          ["win", "lose"].includes(trade.outcome) &&
+          ["manual", "timeout"].includes(trade.closeReason),
+      )
+      .slice(0, MAX_TRADE_HISTORY);
+  } catch {
+    return [];
+  }
+}
+function createTradeRecord(
+  position: Position,
+  exitPrice: number,
+  closedAt: number,
+  closeReason: TradeRecord["closeReason"],
+): TradeRecord {
+  const pnlPct = positionReturn(position, exitPrice);
+  return {
+    id: `${position.symbol}-${position.openedAt}-${closedAt}`,
+    symbol: position.symbol,
+    side: position.side,
+    entryPrice: position.entryPrice,
+    exitPrice,
+    openedAt: position.openedAt,
+    closedAt,
+    pnlPct,
+    outcome: tradeOutcome(pnlPct),
+    closeReason,
+  };
+}
 function App() {
   const [symbol, setSymbol] = useState<SymbolName>("BTCUSDT"),
     [interval, setIntervalValue] = useState(5);
@@ -59,9 +111,11 @@ function App() {
     [forecast, setForecast] = useState<Forecast | null>(null),
     [jevResult, setJevResult] = useState<JevResult | null>(null);
   const [positions, setPositions] = useState(loadPositions),
+    [tradeHistory, setTradeHistory] = useState(loadTradeHistory),
     [now, setNow] = useState(Date.now()),
     [storageError, setStorageError] = useState(false);
   const [restored] = useState(() => new Set(Object.keys(positions)));
+  const autoClosed = useRef<string | null>(null);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -89,11 +143,12 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(positions));
+      localStorage.setItem(historyKey, JSON.stringify(tradeHistory));
       setStorageError(false);
     } catch {
       setStorageError(true);
     }
-  }, [positions]);
+  }, [positions, tradeHistory]);
   const matches = market.symbol === symbol;
   const price = matches ? market.seconds.at(-1)?.close : undefined;
   const fresh =
@@ -115,8 +170,9 @@ function App() {
     [market.five, matches],
   );
   const timeframeTrends = useMemo(
-    () => (matches ? multiTimeframeTrends(market.minutes) : []),
-    [market.minutes, matches],
+    () =>
+      matches ? multiTimeframeTrends(market.minutes, market.five) : [],
+    [market.five, market.minutes, matches],
   );
   const position = positions[symbol];
   useEffect(() => {
@@ -128,6 +184,21 @@ function App() {
     if (extreme !== position.extreme)
       setPositions((p) => ({ ...p, [symbol]: { ...position, extreme } }));
   }, [fresh, price, position, symbol]);
+  useEffect(() => {
+    if (!position || price === undefined || now < paperTradeCloseAt(position.openedAt))
+      return;
+    const closeKey = `${symbol}:${position.openedAt}`;
+    if (autoClosed.current === closeKey) return;
+    autoClosed.current = closeKey;
+    const trade = createTradeRecord(position, price, now, "timeout");
+    setTradeHistory((history) => [trade, ...history].slice(0, MAX_TRADE_HISTORY));
+    setPositions((current) => {
+      if (current[symbol]?.openedAt !== position.openedAt) return current;
+      const next = { ...current };
+      delete next[symbol];
+      return next;
+    });
+  }, [now, position, price, symbol]);
   const activeForecast =
     forecast?.symbol === symbol &&
     forecast.available &&
@@ -162,6 +233,19 @@ function App() {
   const contrarianComment = position
     ? jevContrarianComment(position, jevResult)
     : null;
+  const wins = tradeHistory.filter((trade) => trade.outcome === "win").length;
+  const losses = tradeHistory.length - wins;
+  function closePosition() {
+    if (!position || price === undefined) return;
+    const trade = createTradeRecord(position, price, Date.now(), "manual");
+    setTradeHistory((history) => [trade, ...history].slice(0, MAX_TRADE_HISTORY));
+    setPositions((current) => {
+      if (current[symbol]?.openedAt !== position.openedAt) return current;
+      const next = { ...current };
+      delete next[symbol];
+      return next;
+    });
+  }
   return (
     <main>
       <header>
@@ -227,12 +311,14 @@ function App() {
         <section className="analysis section">
           <div className="section-heading">
             <h2>Multi-timeframe trend</h2>
-            <span>Closed 1m candles</span>
+            <span>5m + closed 1m candles</span>
           </div>
           <div className="timeframe-trends">
             {timeframeTrends.map((trend) => (
               <article key={trend.minutes}>
-                <span>{trend.minutes === 60 ? "1h" : `${trend.minutes}m`}</span>
+                <span>
+                  {trend.minutes === 60 ? "1h" : `${trend.minutes}m`}
+                </span>
                 <strong
                   className={
                     trend.direction === "Bullish"
@@ -249,7 +335,9 @@ function App() {
                 <small>
                   {trend.available
                     ? `${trend.changePct >= 0 ? "+" : ""}${trend.changePct.toFixed(3)}% · ${(trend.efficiency * 100).toFixed(0)}% clean`
-                    : `Need ${trend.minutes} closed bars`}
+                    : trend.minutes === 5
+                      ? "Need 5 closed 5m bars"
+                      : `Need ${trend.minutes} closed 1m bars`}
                 </small>
               </article>
             ))}
@@ -272,7 +360,7 @@ function App() {
           </div>
           <div className="metrics">
             <div>
-              <span>RSI 14</span>
+              <span>RSI {FAST_RSI_PERIOD} · 5m</span>
               <b>{analysis?.rsi.toFixed(1) ?? "—"}</b>
             </div>
             <div>
@@ -307,6 +395,7 @@ function App() {
                   "EMA 21": money(analysis.ema21),
                   "EMA 50": money(analysis.ema50),
                   "SMA 200": money(analysis.sma200),
+                  [`RSI ${FAST_RSI_PERIOD} (fast)`]: analysis.rsi.toFixed(1),
                   "DI+ / DI−": `${analysis.diPlus.toFixed(1)} / ${analysis.diMinus.toFixed(1)}`,
                   "OBV (5 bars)":
                     analysis.obvSlope > 0 ? "Accumulation" : "Distribution",
@@ -408,6 +497,7 @@ function App() {
             )}
             <p className="caption">
               {Math.max(0, Math.floor((now - position.openedAt) / 60000))}m open
+              · Auto-closes in {Math.max(0, Math.ceil((paperTradeCloseAt(position.openedAt) - now) / 1000))}s
               · Raw price return
               {analysis
                 ? ` · ATR trail ${money(position.extreme + (position.side === "long" ? -analysis.atr : analysis.atr))}`
@@ -429,13 +519,7 @@ function App() {
             </p>
             <button
               className="close-button"
-              onClick={() =>
-                setPositions((p) => {
-                  const next = { ...p };
-                  delete next[symbol];
-                  return next;
-                })
-              }
+              onClick={closePosition}
             >
               Close position
             </button>
@@ -465,6 +549,37 @@ function App() {
           <p role="alert">
             Storage unavailable. This position will not survive refresh.
           </p>
+        )}
+      </section>
+      <section className="section trade-history">
+        <div className="section-heading">
+          <h2>Trade history</h2>
+          <span>
+            {wins} win{wins === 1 ? "" : "s"} · {losses} lose
+            {losses === 1 ? "" : "s"}
+          </span>
+        </div>
+        {tradeHistory.length ? (
+          <ul className="history-list">
+            {tradeHistory.slice(0, 8).map((trade) => (
+              <li key={trade.id}>
+                <div>
+                  <strong>
+                    {trade.symbol} · {trade.side === "long" ? "↗ Long" : "↘ Short"}
+                  </strong>
+                  <small>
+                    {new Date(trade.closedAt).toLocaleString()} · {trade.closeReason === "timeout" ? "5m auto-close" : "Manual close"}
+                  </small>
+                </div>
+                <strong className={trade.outcome === "win" ? "up" : "down"}>
+                  {trade.outcome === "win" ? "Win" : "Lose"} · {trade.pnlPct >= 0 ? "+" : ""}
+                  {trade.pnlPct.toFixed(3)}%
+                </strong>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="caption">Closed paper trades will appear here.</p>
         )}
       </section>
       <footer>

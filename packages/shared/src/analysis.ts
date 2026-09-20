@@ -3,7 +3,7 @@ const mean = (a: number[]) => a.reduce((s, n) => s + n, 0) / a.length;
 const last = (a: number[]) => a[a.length - 1];
 
 export type WindowTrend = {
-  minutes: 15 | 30 | 60;
+  minutes: 5 | 15 | 30 | 60;
   direction: "Bullish" | "Bearish" | "Mixed";
   changePct: number;
   efficiency: number;
@@ -12,43 +12,82 @@ export type WindowTrend = {
 
 export const TREND_WINDOWS = [15, 30, 60] as const;
 
-export function multiTimeframeTrends(input: Candle[]): WindowTrend[] {
-  const closed = input.filter((c) => c.closed).sort((a, b) => a.time - b.time);
-  return TREND_WINDOWS.map((minutes) => {
-    const bars = closed.slice(-minutes);
-    const continuous =
-      bars.length === minutes &&
-      bars.every((bar, i) => i === 0 || bar.time - bars[i - 1].time === 60);
-    if (!continuous)
-      return {
-        minutes,
-        direction: "Mixed",
-        changePct: 0,
-        efficiency: 0,
-        available: false,
-      };
+export const FAST_RSI_PERIOD = 7;
+export const PAPER_TRADE_DURATION_MS = 5 * 60 * 1000;
 
-    const start = bars[0].open;
-    const end = bars.at(-1)!.close;
-    const changePct = start ? (end / start - 1) * 100 : 0;
-    const center = (bars.length - 1) / 2;
-    const slope =
-      bars.reduce((sum, bar, i) => sum + (i - center) * bar.close, 0) /
-      bars.reduce((sum, _bar, i) => sum + (i - center) ** 2, 0);
-    const path = bars.reduce(
-      (sum, bar, i) =>
-        sum + Math.abs(bar.close - (i === 0 ? start : bars[i - 1].close)),
-      0,
+export type TradeRecord = {
+  id: string;
+  symbol: SymbolName;
+  side: "long" | "short";
+  entryPrice: number;
+  exitPrice: number;
+  openedAt: number;
+  closedAt: number;
+  pnlPct: number;
+  outcome: "win" | "lose";
+  closeReason: "manual" | "timeout";
+};
+
+export const paperTradeCloseAt = (openedAt: number) =>
+  openedAt + PAPER_TRADE_DURATION_MS;
+
+export const tradeOutcome = (pnlPct: number): TradeRecord["outcome"] =>
+  pnlPct > 0 ? "win" : "lose";
+
+function trendForWindow(
+  input: Candle[],
+  minutes: WindowTrend["minutes"],
+  intervalSeconds: number,
+): WindowTrend {
+  const closed = input.filter((c) => c.closed).sort((a, b) => a.time - b.time);
+  const bars = closed.slice(-minutes);
+  const continuous =
+    bars.length === minutes &&
+    bars.every(
+      (bar, i) => i === 0 || bar.time - bars[i - 1].time === intervalSeconds,
     );
-    const efficiency = path ? Math.min(1, Math.abs(end - start) / path) : 0;
-    const direction =
-      changePct > 0 && slope > 0
-        ? "Bullish"
-        : changePct < 0 && slope < 0
-          ? "Bearish"
-          : "Mixed";
-    return { minutes, direction, changePct, efficiency, available: true };
-  });
+  if (!continuous)
+    return {
+      minutes,
+      direction: "Mixed",
+      changePct: 0,
+      efficiency: 0,
+      available: false,
+    };
+
+  const start = bars[0].open;
+  const end = bars.at(-1)!.close;
+  const center = (bars.length - 1) / 2;
+  const slope =
+    bars.reduce((sum, bar, i) => sum + (i - center) * bar.close, 0) /
+    bars.reduce((sum, _bar, i) => sum + (i - center) ** 2, 0);
+  const path = bars.reduce(
+    (sum, bar, i) =>
+      sum + Math.abs(bar.close - (i === 0 ? start : bars[i - 1].close)),
+    0,
+  );
+  const changePct = start ? (end / start - 1) * 100 : 0;
+  const efficiency = path ? Math.min(1, Math.abs(end - start) / path) : 0;
+  const direction =
+    changePct > 0 && slope > 0
+      ? "Bullish"
+      : changePct < 0 && slope < 0
+        ? "Bearish"
+        : "Mixed";
+  return { minutes, direction, changePct, efficiency, available: true };
+}
+
+export function multiTimeframeTrends(
+  input: Candle[],
+  fiveMinuteInput?: Candle[],
+): WindowTrend[] {
+  const five = fiveMinuteInput
+    ? [trendForWindow(fiveMinuteInput, 5, 300)]
+    : [];
+  return [
+    ...five,
+    ...TREND_WINDOWS.map((minutes) => trendForWindow(input, minutes, 60)),
+  ];
 }
 
 function smooth(a: number[], n: number, alpha = 2 / (n + 1)) {
@@ -57,29 +96,38 @@ function smooth(a: number[], n: number, alpha = 2 / (n + 1)) {
   for (const v of a.slice(n)) out.push(last(out) + alpha * (v - last(out)));
   return out;
 }
+
+/* RSI-7 reacts within roughly 35 minutes of 5m candles, versus 70 minutes for RSI-14. */
+function fastRsi(prices: number[]) {
+  const changes = prices.slice(1).map((v, i) => v - prices[i]);
+  const gain = last(
+    smooth(
+      changes.map((v) => Math.max(v, 0)),
+      FAST_RSI_PERIOD,
+      1 / FAST_RSI_PERIOD,
+    ),
+  );
+  const loss = last(
+    smooth(
+      changes.map((v) => Math.max(-v, 0)),
+      FAST_RSI_PERIOD,
+      1 / FAST_RSI_PERIOD,
+    ),
+  );
+  return loss === 0
+    ? gain === 0
+      ? 50
+      : 100
+    : 100 - 100 / (1 + gain / loss);
+}
+
 export function indicators(input: Candle[]) {
   const c = input.filter((x) => x.closed);
   if (c.length < 200) return null;
   const p = c.map((x) => x.close),
     price = last(p),
     ema = (n: number) => last(smooth(p, n));
-  const changes = p.slice(1).map((v, i) => v - p[i]);
-  const gain = last(
-    smooth(
-      changes.map((v) => Math.max(v, 0)),
-      14,
-      1 / 14,
-    ),
-  );
-  const loss = last(
-    smooth(
-      changes.map((v) => Math.max(-v, 0)),
-      14,
-      1 / 14,
-    ),
-  );
-  const rsi =
-    loss === 0 ? (gain === 0 ? 50 : 100) : 100 - 100 / (1 + gain / loss);
+  const rsi = fastRsi(p);
   const tr = c
     .slice(1)
     .map((v, i) =>
@@ -143,6 +191,7 @@ export function indicators(input: Candle[]) {
     ema50,
     sma200: mean(p.slice(-200)),
     rsi,
+    rsiPeriod: FAST_RSI_PERIOD,
     macd,
     histogram,
     atr,

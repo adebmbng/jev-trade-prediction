@@ -60,6 +60,8 @@ test("context covers five minutes, preserves tiny changes, rejects gaps and stal
     context.timeframeTrends.map((trend) => trend.minutes),
     [15, 30, 60],
   );
+  assert.equal(context.fiveMinuteTrend.minutes, 5);
+  assert.equal(context.fiveMinuteTrend.direction, "Bullish");
   assert.equal(jevContext({ ...m, seconds: m.seconds.slice(1) }, now), null);
   assert.equal(jevContext({ ...m, updatedAt: now - 10000 }, now), null);
   assert.equal(jevContext({ ...m, updatedAt: now + 1 }, now), null);
@@ -77,6 +79,8 @@ test("Jev batches one action, coalesces concurrent requests, caches, and never c
     assert.equal(body.state.leverage, 100);
     assert.equal(typeof body.state.leveragedChangePct.s30, "number");
     assert.equal(body.state.directionByWindow.s5, "up");
+    assert.equal(body.state.fiveMinuteTrend.minutes, 5);
+    assert.equal(body.state.indicators5m.rsiPeriod, 7);
     assert.equal(body.state.timeframeTrends[2].direction, "Bullish");
     assert.equal(body.state.fiveMinuteSession.remainingSeconds, 300);
     assert.equal(body.state.decisionWindow.type, "near_term_scalp");
